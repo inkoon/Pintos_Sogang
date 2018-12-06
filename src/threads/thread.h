@@ -4,7 +4,12 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
+#include "threads/synch.h" /* Project 3 */
+
+#ifndef USERPROG
+/* Project 3 */
+extern bool thread_prior_aging;
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -24,6 +29,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/* Project 3 */
+typedef int32_t fixed;
 
 /* A kernel thread or user process.
 
@@ -94,11 +102,11 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+		struct thread *parent;
+		struct thread *child;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-		struct thread *parent;
-		struct thread *child;
 		enum thread_status child_status;
 		int exit_status;
 		struct semaphore load;
@@ -106,10 +114,16 @@ struct thread
 		struct semaphore wait;
 		struct file *file[128];
 #endif
+		
+		/* Project 3 */
+		int64_t wake_ticks;
+		int nice;
+		fixed recent_cpu;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
 /* Project 2 */
 struct lock file_lock;
 
@@ -151,5 +165,10 @@ int thread_get_load_avg (void);
 
 /* Project 1 */
 struct thread *find_thread(tid_t target);
+
+/* Project 3 */
+bool priority_comp (const struct list_elem *a,
+				const struct list_elem *b,void *aux UNUSED);
+void thread_aging(void);
 
 #endif /* threads/thread.h */
