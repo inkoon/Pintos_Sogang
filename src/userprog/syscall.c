@@ -31,26 +31,23 @@ syscall_handler (struct intr_frame *f)
 	int i;
 	int *args = (int*)(f->esp);
 	uint32_t *pd = thread_current()->pagedir;
-	for(i = 0; i < 4; i++)
+	for(i = 0; i < 4;i++)
 			if(args == NULL || !is_user_vaddr(args) || pagedir_get_page(pd,args) == NULL)
 					exit(-1);
   //printf("syscall : %d : %d\n",args[0],thread_current()->tid);
-	//hex_dump(f->esp,f->esp,100,1);
 	switch(args[0]){
 		case SYS_HALT:
 				halt();
 				break;
 		case SYS_EXIT:
-				if(is_user_vaddr((void*)args[1])){
+				if(is_user_vaddr((void*)args[1]))
 					exit(args[1]);
-				}
 				else
 					exit(-1);
 				break;
 		case SYS_EXEC:
-				if(is_user_vaddr((void*)args[1])){
+				if(is_user_vaddr((void*)args[1]))
 					f->eax = exec((char*)args[1]);	
-				}
 				else{
 					f->eax = -1;
 					exit(-1);
@@ -69,7 +66,7 @@ syscall_handler (struct intr_frame *f)
 				f->eax = remove((const char *)args[1]);
 				break;
 		case SYS_OPEN:
-				if((const char *)args[1] != NULL)
+				if((const char *)args[1] != NULL && is_user_vaddr(args[1]))
 					f->eax = open((const char *)args[1]);
 				else
 					exit(-1);
@@ -78,7 +75,7 @@ syscall_handler (struct intr_frame *f)
 				f->eax = filesize(args[1]);
 				break;
 		case SYS_READ:	
-				if(is_user_vaddr((void*)args[2]))
+				if(is_user_vaddr((void*)args[2]) || (void*)args[2] != NULL)
 					f->eax = read(args[1],(void*)args[2],(unsigned)args[3]);
 				else
 					exit(-1);
@@ -185,6 +182,9 @@ int filesize(int fd){
 int read(int fd, void *buffer, unsigned size){
 	int i,rval = -1;
 	char *buf = (char*)buffer;
+	if(buf == NULL || !is_user_vaddr(buf) ||
+					pagedir_get_page(thread_current()->pagedir,buf) == NULL)
+			exit(-1);
 	if(fd == 0){
 		for(i = 0; i < (int)size; i++)
 			if((buf[i] = (char)input_getc()) == '\0')

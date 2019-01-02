@@ -6,6 +6,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "vm/page.h"
+#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -127,7 +130,7 @@ page_fault (struct intr_frame *f)
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+	void *fault_addr;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -149,17 +152,62 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-	if(!user || is_kernel_vaddr(fault_addr) || not_present)
-			exit(-1);
-
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+	
+	
+	/*if(!user || is_kernel_vaddr(fault_addr) || not_present)
+			exit(-1);*/
+	
+	/* Project 4 */
+	/*bool violation = false;
+	if(!not_present || fault_addr == NULL || !is_user_vaddr(fault_addr)){
+		violation = flase;
+	}
+	else if(fault_addr >= (f->esp - 32)){
+		violation = stack_grow(fault_addr);
+	}
+	
+	if(!violation){
+  	printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  kill (f);
-}
+  	kill (f);
+	}
+	*/
+	
+#if VM
+	bool flag = true;
+	void *esp = f->esp;
+	if(!not_present || (not_present && !write) || !fault_addr || fault_addr == esp - 4)
+		flag = false;
+	else if(esp <= fault_addr || fault_addr == esp - 4 
+					|| fault_addr == esp - 32){
+		size_t i;
+		size_t page_size = (size_t)(PHYS_BASE - pg_round_down(fault_addr));
 
+		if(page_size > (1<<23))
+				flag = false;
+
+		size_t page_num = page_size / PGSIZE - 1;
+
+		for(i = 0; page_num--; i+=PGSIZE){
+			if(pagedir_get_page(thread_current()->pagedir, 
+									pg_round_down(fault_addr) + i)) continue;
+			void *new = palloc_get_page(PAL_USER || PAL_ZERO);
+
+			if(!new || !pagedir_set_page(thread_current()->pagedir,
+									pg_round_down(fault_addr) + i, new, true)){
+					flag = false;
+					break;
+			}
+		}
+	}
+
+	if(flag)
+		return;
+#endif
+
+	exit(-1);
+	kill(f);
+}
